@@ -1,15 +1,29 @@
-// src/components/providers.tsx
+// src/components/providers.tsx - Corrected version with compatible types
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
-import { User } from '@/types'
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { 
+  onAuthStateChanged, 
+  signInWithEmailAndPassword, 
+  signInWithPopup, 
+  signOut as firebaseSignOut,
+  createUserWithEmailAndPassword,
+  User as FirebaseUser
+} from 'firebase/auth'
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { auth, googleProvider, db } from '@/lib/firebase'
+import { User, NotificationItem } from '@/types'
 
 // Auth Context
 interface AuthContextType {
   user: User | null
+  firebaseUser: FirebaseUser | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
+  signInWithGoogle: () => Promise<void>
+  signUp: (email: string, password: string, userData?: Partial<User>) => Promise<void>
   signOut: () => Promise<void>
+  updateUserProfile: (data: Partial<User>) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -39,106 +53,338 @@ export function useTheme() {
 }
 
 // Auth Provider
-function AuthProvider({ children }: { children: React.ReactNode }) {
+function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    // Initialize Firebase Auth listener here
-    // For now, simulating auth check
-    const checkAuth = async () => {
-      try {
-        // Replace with actual Firebase auth check
-        const token = localStorage.getItem('auth_token')
-        if (token) {
-          // Mock user data - replace with actual Firebase user
-          setUser({
-            uid: 'mock-user-id',
-            email: 'user@example.com',
-            role: 'viewer',
-            display_name: 'Mock User'
-          })
-        }
-      } catch (error) {
-        console.error('Auth check failed:', error)
-      } finally {
-        setLoading(false)
+  // Helper function to get user profile from Firestore
+  const getUserProfile = async (uid: string): Promise<User | null> => {
+    try {
+      const userDoc = await getDoc(doc(db, 'users', uid))
+      if (userDoc.exists()) {
+        const data = userDoc.data()
+        // Convert Firestore timestamps to Date objects
+        return {
+          ...data,
+          created_at: data.created_at?.toDate(),
+          last_login: data.last_login?.toDate(),
+          updated_at: data.updated_at?.toDate()
+        } as User
       }
+      return null
+    } catch (error) {
+      console.error('Error fetching user profile:', error)
+      return null
+    }
+  }
+
+  // Helper function to create/update user profile in Firestore
+  const createUserProfile = async (firebaseUser: FirebaseUser, additionalData?: Partial<User>): Promise<User> => {
+    // Create user data with proper typing
+    const baseUserData = {
+      uid: firebaseUser.uid,
+      email: firebaseUser.email || '',
+      display_name: firebaseUser.displayName || additionalData?.display_name || '',
+      role: (additionalData?.role || 'viewer') as User['role'],
+      created_at: serverTimestamp(),
+      last_login: serverTimestamp(),
+      photo_url: firebaseUser.photoURL || additionalData?.photo_url,
+      profile_image: firebaseUser.photoURL || additionalData?.profile_image,
+      phone: additionalData?.phone,
+      organization: additionalData?.organization
     }
 
-    checkAuth()
+    // Add preferences if provided
+    if (additionalData?.preferences) {
+      Object.assign(baseUserData, {
+        preferences: {
+          theme: 'light' as const,
+          notifications: true,
+          default_region: 'jakarta',
+          auto_refresh: true,
+          alert_sound: true,
+          dashboard_layout: 'detailed' as const,
+          ...additionalData.preferences
+        }
+      })
+    } else {
+      Object.assign(baseUserData, {
+        preferences: {
+          theme: 'light' as const,
+          notifications: true,
+          default_region: 'jakarta',
+          auto_refresh: true,
+          alert_sound: true,
+          dashboard_layout: 'detailed' as const
+        }
+      })
+    }
+
+    try {
+      await setDoc(doc(db, 'users', firebaseUser.uid), baseUserData, { merge: true })
+      
+      // Return user data with Date objects for local state
+      return {
+        ...baseUserData,
+        created_at: new Date(),
+        last_login: new Date()
+      } as User
+    } catch (error) {
+      console.error('Error creating user profile:', error)
+      throw error
+    }
+  }
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setLoading(true)
+      
+      if (firebaseUser) {
+        setFirebaseUser(firebaseUser)
+        
+        try {
+          // Get or create user profile
+          let userProfile = await getUserProfile(firebaseUser.uid)
+          
+          if (!userProfile) {
+            userProfile = await createUserProfile(firebaseUser)
+          } else {
+            // Update last login
+            await setDoc(doc(db, 'users', firebaseUser.uid), {
+              last_login: serverTimestamp()
+            }, { merge: true })
+            
+            // Update local last_login for state
+            userProfile.last_login = new Date()
+          }
+          
+          setUser(userProfile)
+        } catch (error) {
+          console.error('Error handling user authentication:', error)
+          setUser(null)
+        }
+      } else {
+        setFirebaseUser(null)
+        setUser(null)
+      }
+      
+      setLoading(false)
+    })
+
+    return unsubscribe
   }, [])
 
   const signIn = async (email: string, password: string) => {
     setLoading(true)
     try {
-      // Replace with actual Firebase auth
-      console.log('Signing in with:', email)
-      localStorage.setItem('auth_token', 'mock-token')
-      setUser({
-        uid: 'mock-user-id',
-        email,
-        role: 'viewer',
-        display_name: email.split('@')[0]
-      })
+      await signInWithEmailAndPassword(auth, email, password)
+      // User state will be updated by onAuthStateChanged
     } catch (error) {
-      console.error('Sign in failed:', error)
-      throw error
-    } finally {
       setLoading(false)
+      throw error
+    }
+  }
+
+  const signInWithGoogle = async () => {
+    setLoading(true)
+    try {
+      await signInWithPopup(auth, googleProvider)
+      // User state will be updated by onAuthStateChanged
+    } catch (error) {
+      setLoading(false)
+      throw error
+    }
+  }
+
+  const signUp = async (email: string, password: string, userData?: Partial<User>) => {
+    setLoading(true)
+    try {
+      const result = await createUserWithEmailAndPassword(auth, email, password)
+      await createUserProfile(result.user, userData)
+      // User state will be updated by onAuthStateChanged
+    } catch (error) {
+      setLoading(false)
+      throw error
     }
   }
 
   const signOut = async () => {
     try {
-      // Replace with actual Firebase signOut
-      localStorage.removeItem('auth_token')
-      setUser(null)
+      await firebaseSignOut(auth)
+      // User state will be updated by onAuthStateChanged
     } catch (error) {
-      console.error('Sign out failed:', error)
       throw error
     }
   }
 
+  const updateUserProfile = async (data: Partial<User>) => {
+    if (!user) throw new Error('No user logged in')
+    
+    try {
+      const updatedData = { 
+        ...data, 
+        updated_at: serverTimestamp() 
+      }
+      await setDoc(doc(db, 'users', user.uid), updatedData, { merge: true })
+      
+      // Update local state with Date object
+      setUser(prev => prev ? { 
+        ...prev, 
+        ...data, 
+        updated_at: new Date() 
+      } : null)
+    } catch (error) {
+      throw error
+    }
+  }
+
+  const value: AuthContextType = {
+    user,
+    firebaseUser,
+    loading,
+    signIn,
+    signInWithGoogle,
+    signUp,
+    signOut,
+    updateUserProfile
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )
 }
 
 // Theme Provider
-function ThemeProvider({ children }: { children: React.ReactNode }) {
+function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark'
-    if (savedTheme) {
-      setTheme(savedTheme)
-      document.documentElement.classList.toggle('dark', savedTheme === 'dark')
+    try {
+      const savedTheme = localStorage.getItem('theme') as 'light' | 'dark'
+      if (savedTheme && (savedTheme === 'light' || savedTheme === 'dark')) {
+        setTheme(savedTheme)
+      } else {
+        const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        setTheme(systemTheme)
+      }
+    } catch (error) {
+      console.error('Error reading theme from localStorage:', error)
     }
   }, [])
 
+  useEffect(() => {
+    try {
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark')
+      } else {
+        document.documentElement.classList.remove('dark')
+      }
+      localStorage.setItem('theme', theme)
+    } catch (error) {
+      console.error('Error saving theme to localStorage:', error)
+    }
+  }, [theme])
+
   const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light'
-    setTheme(newTheme)
-    localStorage.setItem('theme', newTheme)
-    document.documentElement.classList.toggle('dark', newTheme === 'dark')
+    setTheme(prev => prev === 'light' ? 'dark' : 'light')
+  }
+
+  const value: ThemeContextType = {
+    theme,
+    toggleTheme
   }
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   )
 }
 
-// Main Providers Component
-export function Providers({ children }: { children: React.ReactNode }) {
+// Notification Context
+interface NotificationContextType {
+  notifications: NotificationItem[]
+  addNotification: (notification: Omit<NotificationItem, 'id' | 'timestamp'>) => void
+  removeNotification: (id: string) => void
+  markAsRead: (id: string) => void
+  clearAll: () => void
+  unreadCount: number
+}
+
+const NotificationContext = createContext<NotificationContextType | undefined>(undefined)
+
+export function useNotifications() {
+  const context = useContext(NotificationContext)
+  if (context === undefined) {
+    throw new Error('useNotifications must be used within a NotificationProvider')
+  }
+  return context
+}
+
+function NotificationProvider({ children }: { children: ReactNode }) {
+  const [notifications, setNotifications] = useState<NotificationItem[]>([])
+
+  const addNotification = (notification: Omit<NotificationItem, 'id' | 'timestamp'>) => {
+    const newNotification: NotificationItem = {
+      ...notification,
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      timestamp: new Date(),
+      read: false
+    }
+    
+    setNotifications(prev => [newNotification, ...prev])
+    
+    // Auto remove after 8 seconds for non-critical notifications
+    if (notification.type !== 'error') {
+      setTimeout(() => {
+        removeNotification(newNotification.id)
+      }, 8000)
+    }
+  }
+
+  const removeNotification = (id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id))
+  }
+
+  const markAsRead = (id: string) => {
+    setNotifications(prev => 
+      prev.map(n => n.id === id ? { ...n, read: true } : n)
+    )
+  }
+
+  const clearAll = () => {
+    setNotifications([])
+  }
+
+  const unreadCount = notifications.filter(n => !n.read).length
+
+  const value: NotificationContextType = {
+    notifications,
+    addNotification,
+    removeNotification,
+    markAsRead,
+    clearAll,
+    unreadCount
+  }
+
+  return (
+    <NotificationContext.Provider value={value}>
+      {children}
+    </NotificationContext.Provider>
+  )
+}
+
+// Main Providers component
+export function Providers({ children }: { children: ReactNode }) {
   return (
     <ThemeProvider>
       <AuthProvider>
-        {children}
+        <NotificationProvider>
+          {children}
+        </NotificationProvider>
       </AuthProvider>
     </ThemeProvider>
   )
