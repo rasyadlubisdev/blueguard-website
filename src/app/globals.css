@@ -1,0 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-900 font-sans;
+  }
+  
+  /* Leaflet styles override */
+  .leaflet-container {
+    @apply w-full h-full;
+  }
+  
+  .leaflet-popup-content-wrapper {
+    @apply rounded-lg shadow-lg border border-gray-200;
+  }
+  
+  .leaflet-popup-content {
+    @apply m-0 p-0;
+  }
+  
+  .leaflet-popup-tip {
+    @apply border-t-gray-200;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-blue-600 text-white hover:bg-blue-700 px-4 py-2 rounded-md font-medium transition-colors duration-200;
+  }
+  
+  .btn-secondary {
+    @apply bg-gray-200 text-gray-900 hover:bg-gray-300 px-4 py-2 rounded-md font-medium transition-colors duration-200;
+  }
+  
+  .card {
+    @apply bg-white text-gray-900 rounded-lg border border-gray-200 shadow-sm;
+  }
+  
+  .input {
+    @apply flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  
+  .water-quality-excellent {
+    @apply bg-green-500 text-white;
+  }
+  
+  .water-quality-good {
+    @apply bg-blue-500 text-white;
+  }
+  
+  .water-quality-poor {
+    @apply bg-yellow-500 text-white;
+  }
+  
+  .water-quality-verypoor {
+    @apply bg-red-500 text-white;
+  }
+  
+  .water-quality-unsuitable {
+    @apply bg-red-900 text-white;
+  }
+}
