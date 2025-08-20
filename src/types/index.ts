@@ -72,7 +72,20 @@ export interface Alert {
   severity: 'info' | 'warn' | 'critical'
 }
 
-// Enhanced User interface with Firebase auth fields
+// src/types/index.ts
+
+// 1. TAMBAHKAN INTERFACE BARU INI
+export interface UserPreferences {
+  theme?: 'light' | 'dark'
+  notifications?: boolean
+  default_region?: string
+  auto_refresh?: boolean
+  alert_sound?: boolean
+  dashboard_layout?: 'compact' | 'detailed'
+}
+
+
+// 2. UBAH INTERFACE USER ANDA MENJADI SEPERTI INI
 export interface User {
   uid: string
   role: 'admin' | 'operator' | 'viewer'
@@ -83,14 +96,7 @@ export interface User {
   created_at?: Date
   last_login?: Date
   updated_at?: Date
-  preferences?: {
-    theme?: 'light' | 'dark'
-    notifications?: boolean
-    default_region?: string
-    auto_refresh?: boolean
-    alert_sound?: boolean
-    dashboard_layout?: 'compact' | 'detailed'
-  }
+  preferences?: UserPreferences // Gunakan tipe yang baru dibuat
   profile_image?: string
   phone?: string
   organization?: string

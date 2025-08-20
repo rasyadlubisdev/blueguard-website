@@ -1,4 +1,4 @@
-// src/components/providers.tsx - Corrected version with compatible types
+// src/components/providers.tsx - Fixed version with data sanitization
 'use client'
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
@@ -10,7 +10,7 @@ import {
   createUserWithEmailAndPassword,
   User as FirebaseUser
 } from 'firebase/auth'
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, setDoc, serverTimestamp, FieldValue } from 'firebase/firestore'
 import { auth, googleProvider, db } from '@/lib/firebase'
 import { User, NotificationItem } from '@/types'
 
@@ -52,6 +52,30 @@ export function useTheme() {
   return context
 }
 
+// Utility function to remove undefined values with proper typing
+const sanitizeData = <T extends object>(obj: T): Partial<T> => {
+  const cleaned: Partial<T> = {}
+  
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const value = obj[key];
+      if (value !== undefined && value !== null) {
+        if (typeof value === 'object' && !Array.isArray(value) && value.constructor === Object) {
+          const cleanedNested = sanitizeData(value as object);
+          if (Object.keys(cleanedNested).length > 0) {
+            cleaned[key] = cleanedNested as T[Extract<keyof T, string>];
+          }
+        } else {
+          cleaned[key] = value;
+        }
+      }
+    }
+  }
+  
+  return cleaned
+}
+
+
 // Auth Provider
 function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -81,52 +105,52 @@ function AuthProvider({ children }: { children: ReactNode }) {
 
   // Helper function to create/update user profile in Firestore
   const createUserProfile = async (firebaseUser: FirebaseUser, additionalData?: Partial<User>): Promise<User> => {
-    // Create user data with proper typing
-    const baseUserData = {
+    // Create base user data with a specific type, not 'any'
+    const baseUserData: Record<string, unknown> = {
       uid: firebaseUser.uid,
       email: firebaseUser.email || '',
-      display_name: firebaseUser.displayName || additionalData?.display_name || '',
       role: (additionalData?.role || 'viewer') as User['role'],
       created_at: serverTimestamp(),
-      last_login: serverTimestamp(),
-      photo_url: firebaseUser.photoURL || additionalData?.photo_url,
-      profile_image: firebaseUser.photoURL || additionalData?.profile_image,
-      phone: additionalData?.phone,
-      organization: additionalData?.organization
+      last_login: serverTimestamp()
     }
 
-    // Add preferences if provided
-    if (additionalData?.preferences) {
-      Object.assign(baseUserData, {
-        preferences: {
-          theme: 'light' as const,
-          notifications: true,
-          default_region: 'jakarta',
-          auto_refresh: true,
-          alert_sound: true,
-          dashboard_layout: 'detailed' as const,
-          ...additionalData.preferences
-        }
-      })
-    } else {
-      Object.assign(baseUserData, {
-        preferences: {
-          theme: 'light' as const,
-          notifications: true,
-          default_region: 'jakarta',
-          auto_refresh: true,
-          alert_sound: true,
-          dashboard_layout: 'detailed' as const
-        }
-      })
+    // Add optional fields only if they have values
+    if (firebaseUser.displayName || additionalData?.display_name) {
+      baseUserData.display_name = firebaseUser.displayName || additionalData?.display_name
     }
+
+    if (firebaseUser.photoURL) {
+      baseUserData.photo_url = firebaseUser.photoURL
+      baseUserData.profile_image = firebaseUser.photoURL
+    }
+
+    if (additionalData?.phone) {
+      baseUserData.phone = additionalData.phone
+    }
+
+    if (additionalData?.organization) {
+      baseUserData.organization = additionalData.organization
+    }
+
+    // Add preferences with defaults
+    baseUserData.preferences = {
+      theme: additionalData?.preferences?.theme || 'light',
+      notifications: additionalData?.preferences?.notifications ?? true,
+      default_region: additionalData?.preferences?.default_region || 'jakarta',
+      auto_refresh: additionalData?.preferences?.auto_refresh ?? true,
+      alert_sound: additionalData?.preferences?.alert_sound ?? true,
+      dashboard_layout: additionalData?.preferences?.dashboard_layout || 'detailed'
+    }
+
+    // Clean the data to remove any undefined values
+    const cleanedData = sanitizeData(baseUserData)
 
     try {
-      await setDoc(doc(db, 'users', firebaseUser.uid), baseUserData, { merge: true })
+      await setDoc(doc(db, 'users', firebaseUser.uid), cleanedData, { merge: true })
       
       // Return user data with Date objects for local state
       return {
-        ...baseUserData,
+        ...cleanedData,
         created_at: new Date(),
         last_login: new Date()
       } as User
@@ -222,11 +246,16 @@ function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) throw new Error('No user logged in')
     
     try {
-      const updatedData = { 
-        ...data, 
-        updated_at: serverTimestamp() 
+      // Prepare update data with a specific type, not 'any'
+      const updateData: { [key: string]: unknown } = {
+        ...data,
+        updated_at: serverTimestamp()
       }
-      await setDoc(doc(db, 'users', user.uid), updatedData, { merge: true })
+
+      // Clean the data to remove any undefined values before sending to Firestore
+      const cleanedData = sanitizeData(updateData)
+
+      await setDoc(doc(db, 'users', user.uid), cleanedData, { merge: true })
       
       // Update local state with Date object
       setUser(prev => prev ? { 
@@ -235,6 +264,7 @@ function AuthProvider({ children }: { children: ReactNode }) {
         updated_at: new Date() 
       } : null)
     } catch (error) {
+      console.error('Error updating user profile:', error)
       throw error
     }
   }
