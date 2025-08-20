@@ -1,263 +1,331 @@
-// src/types/index.ts - Updated with minimal changes to existing structure
+// src/types/index.ts - Enhanced dengan ML integration dan sensor management (FIXED)
 
-export interface Sensor {
-  id: string
-  name: string
-  location: {
-    lat: number
-    lng: number
-  }
-  river?: string
-  installed_at?: Date
-  meta?: {
-    type?: string
-    sampling_rate?: string
-  }
-  status: 'active' | 'inactive' | 'maintenance'
+// ========== USER & AUTH TYPES ==========
+export interface UserPreferences {
+  theme?: 'light' | 'dark';
+  notifications?: boolean;
+  default_region?: string;
+  auto_refresh?: boolean;
+  alert_sound?: boolean;
+  dashboard_layout?: 'compact' | 'detailed';
 }
 
-export interface WaterReading {
-  sensor_id: string
-  timestamp: Date
-  ph?: number
-  ec?: number
-  co3?: number
-  hco3?: number
-  cl?: number
-  so4?: number
-  no3?: number
-  th?: number
-  ca?: number
-  mg?: number
-  na?: number
-  k?: number
-  f?: number
-  tds?: number
-  wqi_raw?: number
+export interface User {
+  uid: string;
+  role: 'admin' | 'operator' | 'viewer';
+  email: string;
+  display_name?: string;
+  photo_url?: string;
+  created_at?: Date;
+  last_login?: Date;
+  updated_at?: Date;
+  preferences?: UserPreferences;
+  profile_image?: string;
+  phone?: string;
+  organization?: string;
+}
+
+// ========== SENSOR TYPES ==========
+export interface Sensor {
+  id: string;
+  name: string;
+  location: {
+    lat: number;
+    lng: number;
+  };
+  river?: string;
+  status: 'active' | 'inactive' | 'maintenance';
+  auto_sync?: boolean;
+  user_id?: string;
+  district?: string;
+  installed_at?: Date;
+  meta?: {
+    type?: string;
+    sampling_rate?: string;
+  };
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+// Enhanced sensor reading dengan semua parameter ML
+export interface SensorReading {
+  id?: string;
+  sensor_id: string;
+  timestamp: Date | string;
+  well_id?: string;
+
+  // ML Parameters - sesuai dengan FastAPI documentation
+  ph: number;
+  ec: number;                      // Electrical Conductivity
+  co3?: number;                     // Carbonate
+  hco3?: number;                    // Bicarbonate
+  cl?: number;                      // Chloride
+  so4?: number;                     // Sulfate
+  no3?: number;                     // Nitrate
+  th?: number;                      // Total Hardness
+  ca?: number;                      // Calcium
+  mg?: number;                      // Magnesium
+  na?: number;                      // Sodium
+  k?: number;                       // Potassium
+  f?: number;                       // Fluoride
+  tds: number;                      // Total Dissolved Solids
+
+  // Additional monitoring parameters (tidak masuk ML model)
+  turbidity?: number;               // Turbidity (NTU)
+  temperature?: number;             // Temperature (°C)
+  dissolved_oxygen?: number;        // Dissolved Oxygen (mg/L)
+
+  // Location & metadata
+  latitude?: number;
+  longitude?: number;
+  state?: string;
+  district?: string;
+
+  // Legacy support
+  wqi_raw?: number;
+}
+
+// Water reading (alias untuk compatibility)
+export type WaterReading = SensorReading;
+
+// ========== ML PREDICTION TYPES ==========
+export interface ModelInfo {
+  name: string;
+  type: 'sklearn' | 'keras_seq' | 'baseline_persistence' | 'arima_recipe';
+  version?: string;
+  window?: number;
+  lead?: number;
+}
+
+export interface MLPrediction {
+  wqi: number;
+  quality_class: string;
+  confidence?: number;
+  uncertainty?: number;
+  model_info: ModelInfo;
 }
 
 export interface Prediction {
-  sensor_id: string
-  timestamp_input: Date
-  nowcast?: {
-    wqi: number
-    quality_class: string
-    model_info: ModelInfo
-  }
-  forecast?: {
-    horizon: number
-    wqi: number
-    quality_class: string
-    model_info: ModelInfo
-  }
-  explanations?: Record<string, unknown>
-  status: 'ok' | 'insufficient_history' | 'error'
-  created_at: Date
+  id?: string;
+  sensor_id: string;
+  timestamp_input: Date;
+  nowcast?: MLPrediction;
+  forecast?: MLPrediction & {
+    horizon: number;
+  };
+  classification?: {
+    category: string;
+    confidence: number;
+    model_info: ModelInfo;
+  };
+  explanations?: Record<string, unknown>;
+  status: 'ok' | 'insufficient_history' | 'error';
+  created_at: Date;
 }
 
-export interface ModelInfo {
-  name: string
-  type: 'sklearn' | 'keras_seq' | 'baseline_persistence' | 'arima_recipe'
-  version?: string
-  window?: number
-  lead?: number
-}
-
+// ========== ALERT TYPES ==========
 export interface Alert {
-  sensor_id: string
-  timestamp: Date
-  type: 'threshold' | 'changepoint' | 'drift'
-  message: string
-  details: Record<string, unknown>
-  severity: 'info' | 'warn' | 'critical'
+  id?: string;
+  sensor_id: string;
+  timestamp: Date;
+  type: 'threshold' | 'changepoint' | 'drift' | 'sensor_offline' | 'prediction_alert';
+  message: string;
+  details: Record<string, unknown>;
+  severity: 'info' | 'warn' | 'critical';
+  status?: 'active' | 'acknowledged' | 'resolved';
+  location?: string;
+  acknowledged_by?: string;
+  resolved_at?: Date;
 }
 
-// src/types/index.ts
-
-// 1. TAMBAHKAN INTERFACE BARU INI
-export interface UserPreferences {
-  theme?: 'light' | 'dark'
-  notifications?: boolean
-  default_region?: string
-  auto_refresh?: boolean
-  alert_sound?: boolean
-  dashboard_layout?: 'compact' | 'detailed'
+// ========== MAP & VISUALIZATION TYPES ==========
+export interface MarkerData extends Sensor {
+  prediction?: Prediction;
+  latestReading?: SensorReading;
+  alerts?: string[];
+  autoSync?: boolean;
+  lastUpdate?: Date;
 }
 
-
-// 2. UBAH INTERFACE USER ANDA MENJADI SEPERTI INI
-export interface User {
-  uid: string
-  role: 'admin' | 'operator' | 'viewer'
-  email: string
-  display_name?: string
-  photo_url?: string
-  // Additional Firebase/auth fields
-  created_at?: Date
-  last_login?: Date
-  updated_at?: Date
-  preferences?: UserPreferences // Gunakan tipe yang baru dibuat
-  profile_image?: string
-  phone?: string
-  organization?: string
+export interface SensorFormData {
+  name: string;
+  lat: number;
+  lng: number;
+  river?: string;
+  type?: string;
+  district?: string;
 }
 
-// API Response Types
+// ========== API RESPONSE TYPES ==========
 export interface ApiResponse<T> {
-  status: 'ok' | 'error' | 'insufficient_history'
-  data?: T
-  message?: string
-  error?: string
+  status: 'ok' | 'error' | 'insufficient_history';
+  data?: T;
+  message?: string;
+  error?: string;
 }
 
 export interface NowcastResponse {
-  status: 'ok' | 'insufficient_history'
-  sensor_id: string
-  used_until: string
+  status: 'ok' | 'insufficient_history';
+  sensor_id: string;
+  used_until: string;
   nowcast: {
-    wqi: number
-    quality_class: string
-    uncertainty?: number
-  }
-  model_info: ModelInfo
+    wqi: number;
+    quality_class: string;
+    uncertainty?: number;
+  };
+  model_info: ModelInfo;
 }
 
 export interface ForecastResponse {
-  status: 'ok' | 'insufficient_history'
-  sensor_id: string
-  used_until: string
+  status: 'ok' | 'insufficient_history';
+  sensor_id: string;
+  used_until: string;
   forecast: Array<{
-    h: number
-    wqi: number
-    quality_class: string
-  }>
+    h: number;
+    wqi: number;
+    quality_class: string;
+  }>;
   requirements?: {
-    min_window: number
-    have_points: number
-  }
-  model_info: ModelInfo
+    min_window: number;
+    have_points: number;
+  };
+  model_info: ModelInfo;
 }
 
-// Chart Data Types
+// ML API Request/Response types sesuai FastAPI documentation
+export interface MLAPIRequest {
+  sensor_id: string;
+  readings: Array<{
+    timestamp: string;
+    well_id: string;
+    ph: number;
+    ec: number;
+    co3: number;
+    hco3: number;
+    cl: number;
+    so4: number;
+    no3: number;
+    th: number;
+    ca: number;
+    mg: number;
+    na: number;
+    k: number;
+    f: number;
+    tds: number;
+    latitude: number;
+    longitude: number;
+    state: string;
+    district: string;
+  }>;
+  horizon?: number; // For forecast endpoint
+}
+
+export interface MLAPIResponse {
+  sensor_id: string;
+  task: string;
+  prediction: {
+    wqi: number;
+    quality_class: string;
+    confidence: number;
+    horizon: number;
+  };
+  model_info: {
+    name: string;
+    type: string;
+    version: string;
+  };
+  status: string;
+  timestamp: string;
+  explanations: Record<string, unknown>;
+}
+
+// ========== CHART DATA TYPES ==========
 export interface ChartDataPoint {
-  timestamp: string
-  value: number
-  label?: string
+  timestamp: string;
+  value: number;
+  label?: string;
+  color?: string;
 }
 
 export interface TimeSeriesData {
-  wqi: ChartDataPoint[]
-  tds: ChartDataPoint[]
-  ph: ChartDataPoint[]
-  ec: ChartDataPoint[]
-  [key: string]: ChartDataPoint[]
+  time: string;
+  [key: string]: string | number;
 }
 
-// Form Types
-export interface SensorFormData {
-  name: string
-  lat: number
-  lng: number
-  river?: string
-  type?: string
-}
-
-export interface ReadingFormData {
-  timestamp: Date
-  ph?: number
-  ec?: number
-  co3?: number
-  hco3?: number
-  cl?: number
-  so4?: number
-  no3?: number
-  th?: number
-  ca?: number
-  mg?: number
-  na?: number
-  k?: number
-  f?: number
-  tds?: number
-}
-
-// Map Types
-export interface MapBounds {
-  north: number
-  south: number
-  east: number
-  west: number
-}
-
-export interface MarkerData extends Sensor {
-  prediction?: Prediction
-  latestReading?: WaterReading
-}
-
-// Additional types for new components (maintaining compatibility)
+// ========== NOTIFICATION TYPES ==========
 export interface NotificationItem {
-  id: string
-  type: 'success' | 'error' | 'warning' | 'info'
-  title: string
-  message: string
-  timestamp: Date
-  read?: boolean
-  action_url?: string
+  id: string;
+  type: 'success' | 'error' | 'warning' | 'info';
+  title: string;
+  message: string;
+  timestamp: Date;
+  read: boolean;
+  action?: {
+    label: string;
+    onClick: () => void;
+  };
 }
 
-export interface SensorData {
-  id: string
-  sensor_id: string
-  location: {
-    lat: number
-    lng: number
-    name: string
-    district: string
-  }
-  wqi: number
-  ph: number
-  turbidity: number
-  tds: number
-  temperature: number
-  dissolved_oxygen: number
-  conductivity: number
-  timestamp: Date
-  status: 'online' | 'offline' | 'maintenance'
-  battery_level?: number
+// ========== FORM & UI TYPES ==========
+export interface FilterOptions {
+  status?: 'all' | 'active' | 'inactive' | 'maintenance';
+  region?: string;
+  timeRange?: '1h' | '24h' | '7d' | '30d';
+  searchTerm?: string;
 }
 
-export interface WQIPrediction {
-  sensor_id: string
-  predictions: {
-    h1: number   // 1 hour ahead
-    h2: number   // 2 hours ahead
-    h4: number   // 4 hours ahead
-    h8: number   // 8 hours ahead
-    h12: number  // 12 hours ahead
-    h24: number  // 24 hours ahead
-  }
-  model_confidence: number
-  generated_at: Date
+export interface PaginationOptions {
+  page: number;
+  limit: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
-export interface ChatMessage {
-  id: string
-  content: string
-  sender: 'user' | 'bot'
-  timestamp: Date
-  type?: 'text' | 'chart' | 'map' | 'alert'
+// ========== DASHBOARD TYPES ==========
+export interface DashboardMetrics {
+  totalSensors: number;
+  activeSensors: number;
+  averageWQI: number;
+  totalAlerts: number;
+  dataPointsToday: number;
+  lastUpdate: Date;
 }
 
-// WebSocket Message Types
-export interface WebSocketMessage<T = unknown> {
-  type: 'sensor_update' | 'alert_new' | 'alert_resolved' | 'system_status' | 'chat_response'
-  timestamp: string
-  data: T
-  sensor_id?: string
+export interface RegionData {
+  name: string;
+  value: number;
+  sensors: number;
+  color: string;
+  alerts?: number;
 }
 
-// Export utility types
-export type SensorParameter = 'wqi_raw' | 'ph' | 'turbidity' | 'tds' | 'ec' | 'temperature'
-export type TimeRange = '1h' | '6h' | '24h' | '7d' | '30d'
-export type UserRole = User['role']
-export type AlertSeverity = Alert['severity']
-export type SensorStatus = Sensor['status']
+// ========== SYSTEM STATUS TYPES ==========
+export interface SystemStatus {
+  mlAPI: {
+    status: 'online' | 'offline' | 'degraded';
+    responseTime: number;
+    lastCheck: Date;
+  };
+  firebase: {
+    status: 'connected' | 'disconnected';
+    realTimeSync: boolean;
+    lastSync: Date;
+  };
+  sensors: {
+    total: number;
+    active: number;
+    offline: number;
+    maintenance: number;
+  };
+}
+
+// ========== EXPORT TYPES ==========
+export interface ExportOptions {
+  format: 'csv' | 'json' | 'xlsx';
+  dateRange: {
+    start: Date;
+    end: Date;
+  };
+  sensors?: string[];
+  parameters?: string[];
+}
