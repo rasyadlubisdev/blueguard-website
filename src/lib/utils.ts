@@ -11,10 +11,10 @@ export function cn(...inputs: ClassValue[]) {
 export function isValidCoordinate(lat: number, lng: number): boolean {
   // Jakarta coordinate bounds (approximate)
   const jakartaBounds = {
-    minLat: -6.4,
-    maxLat: -5.9,
-    minLng: 106.6,
-    maxLng: 107.1
+    minLat: -6.5,    // Lebih fleksibel ke selatan
+    maxLat: -5.8,    // Hingga utara Jakarta  
+    minLng: 106.5,   // Dari barat Jakarta
+    maxLng: 107.2    // Hingga timur Jakarta
   }
 
   return (
