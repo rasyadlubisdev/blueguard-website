@@ -259,7 +259,7 @@ export interface NotificationItem {
   title: string;
   message: string;
   timestamp: Date;
-  read: boolean;
+  read?: boolean;
   action?: {
     label: string;
     onClick: () => void;

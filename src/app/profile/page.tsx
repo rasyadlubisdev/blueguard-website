@@ -1,4 +1,4 @@
-// src/app/profile/page.tsx - User Profile Management
+// src/app/profile/page.tsx - User Profile Management (FIXED)
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -9,7 +9,7 @@ import {
   LogOut, AlertCircle, CheckCircle, Loader2
 } from 'lucide-react'
 import { useAuth, useNotifications, useTheme } from '@/components/providers'
-import { User as UserType, UserPreferences } from '@/types' // Pastikan UserPreferences di-import
+import { User as UserType } from '@/types'
 
 // Definisikan tipe untuk form data agar lebih aman
 interface ProfileFormData {
@@ -34,18 +34,17 @@ export default function ProfilePage() {
 
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
-  // Gunakan tipe yang sudah didefinisikan untuk state
   const [formData, setFormData] = useState<ProfileFormData>({
     display_name: '',
     phone: '',
     organization: '',
     preferences: {
-      theme: 'light', // Hapus 'as const'
+      theme: 'light',
       notifications: true,
       default_region: 'jakarta',
       auto_refresh: true,
       alert_sound: true,
-      dashboard_layout: 'detailed' // Hapus 'as const'
+      dashboard_layout: 'detailed'
     }
   })
 
@@ -59,7 +58,6 @@ export default function ProfilePage() {
   // Initialize form data when user loads
   useEffect(() => {
     if (user) {
-      // Logika ini sekarang aman secara tipe dan tidak akan error
       setFormData({
         display_name: user.display_name || '',
         phone: user.phone || '',
@@ -97,36 +95,35 @@ export default function ProfilePage() {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSave = async () => {
     if (!user) return
 
-    setLoading(true)
     try {
-      // Pastikan tipe data yang dikirim sesuai dengan yang diharapkan updateUserProfile
-      const updatedPreferences: UserPreferences = {
-        ...formData.preferences
-      };
+      setLoading(true)
 
-      await updateUserProfile({
+      // Prepare update data
+      const updateData: Partial<UserType> = {
         display_name: formData.display_name,
         phone: formData.phone,
         organization: formData.organization,
-        preferences: updatedPreferences
-      })
+        preferences: formData.preferences
+      }
+
+      await updateUserProfile(updateData)
 
       addNotification({
         type: 'success',
         title: 'Profil Diperbarui',
-        message: 'Informasi profil Anda berhasil disimpan'
+        message: 'Perubahan profil berhasil disimpan'
       })
+
       setIsEditing(false)
     } catch (error) {
-      console.error('Profile update error:', error)
+      console.error('Error updating profile:', error)
       addNotification({
         type: 'error',
-        title: 'Gagal Memperbarui',
-        message: 'Terjadi kesalahan saat menyimpan profil'
+        title: 'Error',
+        message: 'Gagal memperbarui profil'
       })
     } finally {
       setLoading(false)
@@ -139,426 +136,443 @@ export default function ProfilePage() {
       addNotification({
         type: 'success',
         title: 'Logout Berhasil',
-        message: 'Anda telah keluar dari akun'
+        message: 'Anda telah berhasil keluar'
       })
-      router.push('/')
+      router.push('/auth')
     } catch (error) {
       addNotification({
         type: 'error',
-        title: 'Logout Gagal',
-        message: 'Terjadi kesalahan saat logout'
+        title: 'Error',
+        message: 'Gagal logout'
       })
     }
   }
 
-  const getRoleBadgeColor = (role: string | undefined) => {
-    switch (role) {
-      case 'admin': return 'bg-red-100 text-red-800 border-red-200'
-      case 'operator': return 'bg-blue-100 text-blue-800 border-blue-200'
-      case 'viewer': return 'bg-green-100 text-green-800 border-green-200'
-      default: return 'bg-gray-100 text-gray-800 border-gray-200'
+  const handleCancel = () => {
+    if (user) {
+      setFormData({
+        display_name: user.display_name || '',
+        phone: user.phone || '',
+        organization: user.organization || '',
+        preferences: {
+          theme: user.preferences?.theme || 'light',
+          notifications: user.preferences?.notifications ?? true,
+          default_region: user.preferences?.default_region || 'jakarta',
+          auto_refresh: user.preferences?.auto_refresh ?? true,
+          alert_sound: user.preferences?.alert_sound ?? true,
+          dashboard_layout: user.preferences?.dashboard_layout || 'detailed'
+        }
+      })
     }
+    setIsEditing(false)
   }
 
-  const formatDate = (date: Date | undefined) => {
-    if (!date) return '-'
-    // Pastikan date adalah objek Date yang valid
-    const dateObj = date instanceof Date ? date : new Date(date);
-    if (isNaN(dateObj.getTime())) return '-';
-    
-    return new Intl.DateTimeFormat('id-ID', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(dateObj)
-  }
-
-  if (authLoading || !user) {
+  // Show loading while checking auth
+  if (authLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600">Memuat profil...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
       </div>
     )
   }
-  
-  // Perluas definisi tipe User agar mencakup semua properti yang mungkin ada
-  const safeUser = user as UserType & {
-    profile_image?: string;
-    photo_url?: string;
-    organization?: string;
-    phone?: string;
-  };
+
+  if (!user) {
+    return null
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Profil Pengguna</h1>
-          <p className="text-gray-600 mt-2">Kelola informasi akun dan preferensi Anda</p>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Profile Card */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <div className="text-center">
-                {/* Profile Image */}
-                <div className="relative inline-block">
-                  {safeUser.profile_image || safeUser.photo_url ? (
-                    <img
-                      src={safeUser.profile_image || safeUser.photo_url}
-                      alt={safeUser.display_name || 'User'}
-                      className="w-24 h-24 rounded-full mx-auto object-cover"
-                    />
-                  ) : (
-                    <div className="w-24 h-24 bg-blue-600 rounded-full flex items-center justify-center mx-auto">
-                      <User className="w-12 h-12 text-white" />
-                    </div>
-                  )}
-                  <button className="absolute bottom-0 right-0 bg-white rounded-full p-2 shadow-md border hover:bg-gray-50 transition-colors">
-                    <Camera className="w-4 h-4 text-gray-600" />
-                  </button>
-                </div>
-
-                {/* Basic Info */}
-                <h2 className="text-xl font-semibold text-gray-900 mt-4">
-                  {safeUser.display_name || 'Pengguna BlueGuard'}
-                </h2>
-                <p className="text-gray-600">{safeUser.email}</p>
-                
-                {/* Role Badge */}
-                <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium border mt-3 capitalize ${getRoleBadgeColor(safeUser.role)}`}>
-                  <Shield className="w-4 h-4 inline mr-1" />
-                  {safeUser.role}
-                </span>
-
-                {/* Account Info */}
-                <div className="mt-6 space-y-3 text-left">
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Calendar className="w-4 h-4 mr-2" />
-                    <span>Bergabung: {formatDate(safeUser.created_at)}</span>
-                  </div>
-                  <div className="flex items-center text-sm text-gray-600">
-                    <RefreshCw className="w-4 h-4 mr-2" />
-                    <span>Login terakhir: {formatDate(safeUser.last_login)}</span>
-                  </div>
-                </div>
-
-                {/* Sign Out Button */}
-                <button
-                  onClick={handleSignOut}
-                  className="mt-6 w-full flex items-center justify-center space-x-2 py-2 px-4 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>Keluar Akun</span>
-                </button>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Profil Pengguna</h1>
+                <p className="text-sm text-gray-600">Kelola informasi akun dan preferensi Anda</p>
               </div>
-            </div>
-          </div>
-
-          {/* Main Content */}
-          <div className="lg:col-span-2">
-            <div className="bg-white rounded-xl shadow-sm">
-              {/* Header */}
-              <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900">Informasi Profil</h3>
-                {!isEditing ? (
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="flex items-center space-x-2 px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                    <span>Edit Profil</span>
-                  </button>
-                ) : (
-                  <div className="flex space-x-2">
+              <div className="flex items-center space-x-3">
+                {isEditing ? (
+                  <>
                     <button
-                      onClick={() => setIsEditing(false)}
-                      className="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+                      onClick={handleCancel}
+                      disabled={loading}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
                     >
                       Batal
                     </button>
                     <button
-                      onClick={handleSubmit}
+                      onClick={handleSave}
                       disabled={loading}
-                      className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 flex items-center"
                     >
                       {loading ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
                       ) : (
-                        <Save className="w-4 h-4" />
+                        <Save className="w-4 h-4 mr-2" />
                       )}
-                      <span>Simpan</span>
+                      Simpan
                     </button>
-                  </div>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center"
+                  >
+                    <Edit3 className="w-4 h-4 mr-2" />
+                    Edit Profil
+                  </button>
                 )}
               </div>
+            </div>
+          </div>
 
-              {/* Form */}
-              <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                {/* Personal Information */}
-                <div>
-                  <h4 className="text-md font-medium text-gray-900 mb-4">Informasi Pribadi</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="display_name" className="block text-sm font-medium text-gray-700 mb-1">
-                        Nama Lengkap
-                      </label>
-                      <div className="relative">
-                        <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                        <input
-                          type="text"
-                          id="display_name"
-                          name="display_name"
-                          value={formData.display_name}
-                          onChange={handleInputChange}
-                          disabled={!isEditing}
-                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
-                          placeholder="Nama lengkap"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                        Email
-                      </label>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                        <input
-                          type="email"
-                          id="email"
-                          value={safeUser.email}
-                          disabled
-                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
-                        />
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">Email tidak dapat diubah</p>
-                    </div>
-
-                    <div>
-                      <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">
-                        Nomor Telepon
-                      </label>
-                      <div className="relative">
-                        <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                        <input
-                          type="tel"
-                          id="phone"
-                          name="phone"
-                          value={formData.phone}
-                          onChange={handleInputChange}
-                          disabled={!isEditing}
-                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
-                          placeholder="+62 812 3456 7890"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label htmlFor="organization" className="block text-sm font-medium text-gray-700 mb-1">
-                        Organisasi
-                      </label>
-                      <div className="relative">
-                        <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                        <input
-                          type="text"
-                          id="organization"
-                          name="organization"
-                          value={formData.organization}
-                          onChange={handleInputChange}
-                          disabled={!isEditing}
-                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
-                          placeholder="Nama perusahaan/institusi"
-                        />
-                      </div>
-                    </div>
-                  </div>
+          {/* Profile Picture Section */}
+          <div className="px-6 py-6 border-b border-gray-200">
+            <div className="flex items-center space-x-6">
+              <div className="relative">
+                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                  {user.profile_image ? (
+                    <img
+                      src={user.profile_image}
+                      alt="Profile"
+                      className="w-24 h-24 rounded-full object-cover"
+                    />
+                  ) : (
+                    <User className="w-12 h-12 text-white" />
+                  )}
                 </div>
-
-                {/* Preferences */}
-                <div>
-                  <h4 className="text-md font-medium text-gray-900 mb-4">Preferensi</h4>
-                  <div className="space-y-4">
-                    {/* Theme */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <Palette className="w-5 h-5 text-gray-400" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">Tema</p>
-                          <p className="text-xs text-gray-500">Pilih tampilan terang atau gelap</p>
-                        </div>
-                      </div>
-                      <select
-                        name="preferences.theme"
-                        value={formData.preferences.theme}
-                        onChange={handleInputChange}
-                        disabled={!isEditing}
-                        className="border border-gray-300 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
-                      >
-                        <option value="light">Terang</option>
-                        <option value="dark">Gelap</option>
-                      </select>
-                    </div>
-
-                    {/* Default Region */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <MapPin className="w-5 h-5 text-gray-400" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">Wilayah Default</p>
-                          <p className="text-xs text-gray-500">Wilayah yang ditampilkan saat membuka peta</p>
-                        </div>
-                      </div>
-                      <select
-                        name="preferences.default_region"
-                        value={formData.preferences.default_region}
-                        onChange={handleInputChange}
-                        disabled={!isEditing}
-                        className="border border-gray-300 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
-                      >
-                        <option value="jakarta">Jakarta</option>
-                        <option value="jakarta_pusat">Jakarta Pusat</option>
-                        <option value="jakarta_utara">Jakarta Utara</option>
-                        <option value="jakarta_selatan">Jakarta Selatan</option>
-                        <option value="jakarta_timur">Jakarta Timur</option>
-                        <option value="jakarta_barat">Jakarta Barat</option>
-                      </select>
-                    </div>
-
-                    {/* Dashboard Layout */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <RefreshCw className="w-5 h-5 text-gray-400" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">Layout Dashboard</p>
-                          <p className="text-xs text-gray-500">Tampilan dashboard yang disukai</p>
-                        </div>
-                      </div>
-                      <select
-                        name="preferences.dashboard_layout"
-                        value={formData.preferences.dashboard_layout}
-                        onChange={handleInputChange}
-                        disabled={!isEditing}
-                        className="border border-gray-300 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
-                      >
-                        <option value="compact">Kompak</option>
-                        <option value="detailed">Detail</option>
-                      </select>
-                    </div>
-
-                    {/* Notifications */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <Bell className="w-5 h-5 text-gray-400" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">Notifikasi</p>
-                          <p className="text-xs text-gray-500">Terima notifikasi untuk alert dan pembaruan</p>
-                        </div>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          name="preferences.notifications"
-                          checked={formData.preferences.notifications}
-                          onChange={handleInputChange}
-                          disabled={!isEditing}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 disabled:opacity-50"></div>
-                      </label>
-                    </div>
-
-                    {/* Auto Refresh */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <RefreshCw className="w-5 h-5 text-gray-400" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">Refresh Otomatis</p>
-                          <p className="text-xs text-gray-500">Perbarui data secara otomatis</p>
-                        </div>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          name="preferences.auto_refresh"
-                          checked={formData.preferences.auto_refresh}
-                          onChange={handleInputChange}
-                          disabled={!isEditing}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 disabled:opacity-50"></div>
-                      </label>
-                    </div>
-
-                    {/* Alert Sound */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <AlertCircle className="w-5 h-5 text-gray-400" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">Suara Alert</p>
-                          <p className="text-xs text-gray-500">Mainkan suara untuk alert penting</p>
-                        </div>
-                      </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          name="preferences.alert_sound"
-                          checked={formData.preferences.alert_sound}
-                          onChange={handleInputChange}
-                          disabled={!isEditing}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 disabled:opacity-50"></div>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick Actions */}
-                <div>
-                  <h4 className="text-md font-medium text-gray-900 mb-4">Aksi Cepat</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <button
-                      type="button"
-                      onClick={toggleTheme}
-                      className="flex items-center justify-center space-x-2 py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      <Palette className="w-4 h-4" />
-                      <span>Toggle Tema ({theme})</span>
-                    </button>
-                    
-                    <button
-                      type="button"
-                      onClick={() => window.location.reload()}
-                      className="flex items-center justify-center space-x-2 py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      <span>Refresh Halaman</span>
-                    </button>
-                  </div>
-                </div>
-              </form>
+                {isEditing && (
+                  <button className="absolute bottom-0 right-0 bg-white rounded-full p-2 shadow-md border border-gray-200 hover:bg-gray-50">
+                    <Camera className="w-4 h-4 text-gray-600" />
+                  </button>
+                )}
+              </div>
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">
+                  {formData.display_name || 'Nama belum diatur'}
+                </h3>
+                <p className="text-sm text-gray-600">{user.email}</p>
+                <p className="text-sm text-gray-500 capitalize">
+                  Role: {user.role}
+                </p>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Security Notice */}
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-start space-x-3">
-            <Shield className="w-5 h-5 text-blue-600 mt-0.5" />
-            <div>
-              <h5 className="text-sm font-medium text-blue-900">Keamanan Akun</h5>
-              <p className="text-sm text-blue-700 mt-1">
-                Akun Anda dilindungi dengan Firebase Authentication. 
-                Jika Anda mencurigai aktivitas yang tidak biasa, segera logout dan login kembali.
-              </p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Basic Information */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-lg font-medium text-gray-900">Informasi Dasar</h2>
+              </div>
+              <div className="px-6 py-6 space-y-6">
+                {/* Display Name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Nama Lengkap
+                  </label>
+                  {isEditing ? (
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="text"
+                        name="display_name"
+                        value={formData.display_name}
+                        onChange={handleInputChange}
+                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Masukkan nama lengkap"
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-gray-900">{formData.display_name || '-'}</p>
+                  )}
+                </div>
+
+                {/* Email (Read-only) */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Email
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="email"
+                      value={user.email || ''}
+                      disabled
+                      className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Email tidak dapat diubah</p>
+                </div>
+
+                {/* Phone */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Nomor Telepon
+                  </label>
+                  {isEditing ? (
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="tel"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleInputChange}
+                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Masukkan nomor telepon"
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-gray-900">{formData.phone || '-'}</p>
+                  )}
+                </div>
+
+                {/* Organization */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Organisasi
+                  </label>
+                  {isEditing ? (
+                    <div className="relative">
+                      <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="text"
+                        name="organization"
+                        value={formData.organization}
+                        onChange={handleInputChange}
+                        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Masukkan nama organisasi"
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-gray-900">{formData.organization || '-'}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Account Info & Preferences */}
+          <div className="space-y-6">
+            {/* Account Info */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-lg font-medium text-gray-900">Info Akun</h2>
+              </div>
+              <div className="px-6 py-6 space-y-4">
+                <div className="flex items-center space-x-3">
+                  <Calendar className="w-5 h-5 text-gray-400" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Bergabung</p>
+                    <p className="text-sm text-gray-600">
+                      {user.created_at?.toLocaleDateString('id-ID') || '-'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <RefreshCw className="w-5 h-5 text-gray-400" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Login Terakhir</p>
+                    <p className="text-sm text-gray-600">
+                      {user.last_login?.toLocaleDateString('id-ID') || '-'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <Shield className="w-5 h-5 text-gray-400" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Role</p>
+                    <p className="text-sm text-gray-600 capitalize">{user.role}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Preferences */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="text-lg font-medium text-gray-900">Preferensi</h2>
+              </div>
+              <div className="px-6 py-6 space-y-4">
+                {/* Theme */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Palette className="w-5 h-5 text-gray-400" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Theme</p>
+                      <p className="text-xs text-gray-500">Mode tampilan aplikasi</p>
+                    </div>
+                  </div>
+                  {isEditing ? (
+                    <select
+                      name="preferences.theme"
+                      value={formData.preferences.theme}
+                      onChange={handleInputChange}
+                      className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="light">Light</option>
+                      <option value="dark">Dark</option>
+                    </select>
+                  ) : (
+                    <button
+                      onClick={toggleTheme}
+                      className="text-sm text-blue-600 hover:text-blue-800 capitalize"
+                    >
+                      {theme}
+                    </button>
+                  )}
+                </div>
+
+                {/* Notifications */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Bell className="w-5 h-5 text-gray-400" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Notifikasi</p>
+                      <p className="text-xs text-gray-500">Terima notifikasi push</p>
+                    </div>
+                  </div>
+                  {isEditing ? (
+                    <input
+                      type="checkbox"
+                      name="preferences.notifications"
+                      checked={formData.preferences.notifications}
+                      onChange={handleInputChange}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                  ) : (
+                    <span className={`text-sm ${formData.preferences.notifications ? 'text-green-600' : 'text-gray-500'}`}>
+                      {formData.preferences.notifications ? 'Aktif' : 'Nonaktif'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Auto Refresh */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <RefreshCw className="w-5 h-5 text-gray-400" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Auto Refresh</p>
+                      <p className="text-xs text-gray-500">Refresh data otomatis</p>
+                    </div>
+                  </div>
+                  {isEditing ? (
+                    <input
+                      type="checkbox"
+                      name="preferences.auto_refresh"
+                      checked={formData.preferences.auto_refresh}
+                      onChange={handleInputChange}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                  ) : (
+                    <span className={`text-sm ${formData.preferences.auto_refresh ? 'text-green-600' : 'text-gray-500'}`}>
+                      {formData.preferences.auto_refresh ? 'Aktif' : 'Nonaktif'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Alert Sound */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Bell className="w-5 h-5 text-gray-400" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Suara Alert</p>
+                      <p className="text-xs text-gray-500">Bunyi notifikasi</p>
+                    </div>
+                  </div>
+                  {isEditing ? (
+                    <input
+                      type="checkbox"
+                      name="preferences.alert_sound"
+                      checked={formData.preferences.alert_sound}
+                      onChange={handleInputChange}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                  ) : (
+                    <span className={`text-sm ${formData.preferences.alert_sound ? 'text-green-600' : 'text-gray-500'}`}>
+                      {formData.preferences.alert_sound ? 'Aktif' : 'Nonaktif'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Default Region */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <MapPin className="w-5 h-5 text-gray-400" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Wilayah Default</p>
+                      <p className="text-xs text-gray-500">Wilayah default peta</p>
+                    </div>
+                  </div>
+                  {isEditing ? (
+                    <select
+                      name="preferences.default_region"
+                      value={formData.preferences.default_region}
+                      onChange={handleInputChange}
+                      className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="jakarta">Jakarta</option>
+                      <option value="bandung">Bandung</option>
+                      <option value="surabaya">Surabaya</option>
+                      <option value="medan">Medan</option>
+                      <option value="semarang">Semarang</option>
+                    </select>
+                  ) : (
+                    <span className="text-sm text-gray-600 capitalize">
+                      {formData.preferences.default_region}
+                    </span>
+                  )}
+                </div>
+
+                {/* Dashboard Layout */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-5 h-5 text-gray-400">
+                      <svg fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">Layout Dashboard</p>
+                      <p className="text-xs text-gray-500">Tampilan dashboard</p>
+                    </div>
+                  </div>
+                  {isEditing ? (
+                    <select
+                      name="preferences.dashboard_layout"
+                      value={formData.preferences.dashboard_layout}
+                      onChange={handleInputChange}
+                      className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="detailed">Detailed</option>
+                      <option value="compact">Compact</option>
+                    </select>
+                  ) : (
+                    <span className="text-sm text-gray-600 capitalize">
+                      {formData.preferences.dashboard_layout}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Danger Zone */}
+            <div className="bg-white rounded-lg shadow-sm border border-red-200">
+              <div className="px-6 py-4 border-b border-red-200">
+                <h2 className="text-lg font-medium text-red-900">Danger Zone</h2>
+              </div>
+              <div className="px-6 py-6">
+                <button
+                  onClick={handleSignOut}
+                  className="w-full flex items-center justify-center px-4 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Keluar dari Akun
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -193,7 +193,7 @@ export function usePredictions(sensorId: string) {
       await ApiService.savePrediction({
         sensor_id: sensorId,
         timestamp_input: new Date(),
-        nowcast: result.prediction,
+        nowcast: result,
         status: result.status
       })
       
@@ -222,7 +222,7 @@ export function usePredictions(sensorId: string) {
       await ApiService.savePrediction({
         sensor_id: sensorId,
         timestamp_input: new Date(),
-        forecast: result.prediction,
+        forecast: result,
         status: result.status
       })
       
@@ -251,7 +251,7 @@ export function usePredictions(sensorId: string) {
       await ApiService.savePrediction({
         sensor_id: sensorId,
         timestamp_input: new Date(),
-        classification: result.prediction,
+        classification: result,
         status: result.status
       })
       
@@ -682,63 +682,5 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
     }
   }, [key, storedValue])
 
-  const removeValue = useCallback(() => {
-    try {
-      if (typeof window !== 'undefined') {
-        window.localStorage.removeItem(key)
-      }
-      setStoredValue(initialValue)
-    } catch (error) {
-      console.error(`Error removing localStorage key "${key}":`, error)
-    }
-  }, [key, initialValue])
-
-  return [storedValue, setValue, removeValue] as const
-}
-
-// Export data hook
-export function useDataExport() {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const exportSensorData = useCallback(async (
-    sensorId: string, 
-    format: 'csv' | 'json' = 'csv',
-    filename?: string
-  ) => {
-    try {
-      setLoading(true)
-      setError(null)
-
-      const readings = await ApiService.getSensorReadings(sensorId, 1000) // Get more data for export
-
-      if (readings.length === 0) {
-        throw new Error('No data available for export')
-      }
-
-      const exportFilename = filename || `sensor_${sensorId}_data`
-
-      if (format === 'csv') {
-        ApiService.exportToCSV(readings, exportFilename)
-      } else {
-        // JSON export
-        const jsonContent = JSON.stringify(readings, null, 2)
-        const blob = new Blob([jsonContent], { type: 'application/json' })
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${exportFilename}_${new Date().toISOString().split('T')[0]}.json`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-        window.URL.revokeObjectURL(url)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Export failed')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  return { exportSensorData, loading, error }
+  return [storedValue, setValue] as const
 }
